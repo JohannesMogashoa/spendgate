@@ -1,0 +1,20 @@
+generator client {
+    provider = "prisma-client"
+    output   = "../src/lib/generated/prisma"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+model SpendRule {
+    id             String   @id @default(cuid())
+    label          String
+    active         Boolean  @default(true)
+    priority       Int      @default(0)
+    stopProcessing Boolean  @default(false)
+    conditions     Json // RuleCondition[]
+    actions        Json // RuleAction[]
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+}
