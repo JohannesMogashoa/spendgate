@@ -1,11 +1,14 @@
-import { TransactionList } from "@/components/TransactionList";
+import { TransactionList } from "@/components/transactions/TransactionList";
+import { RuleList } from "@/components/RuleList";
 
 export default function Home() {
     return (
-        <div className="min-h-screen bg-slate-50">
-            <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
-                <TransactionList />
-            </main>
+        <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Transactions{" "}
+            </h2>
+            <TransactionList />
+            <RuleList />
         </div>
     );
 }

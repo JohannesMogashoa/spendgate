@@ -1,21 +1,19 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { CodePreview } from "@/components/CodePreview";
 import { RuleBuilder } from "@/components/RuleBuilder";
 import { useRules } from "@/hooks/useRules";
-import type { RuleSuggestion } from "@/lib/rule-suggester";
-import { RuleList } from "@/components/RuleList";
 import { SimulationPanel } from "@/components/SimulationPanel";
+import { useRulesStore } from "@/context/providers/rules-store-provider";
 
 const RulesPage = () => {
-    const { rules, compiledCode, loading, error, addRule, toggleRule, deleteRule, reorderRule } =
-        useRules();
+    const { rules, compiledCode, error, addRule } = useRules();
+    const { suggestion, clearSuggestion } = useRulesStore((s) => s);
 
-    const [prefilledSuggestion, setPrefilledSuggestion] = useState<RuleSuggestion | null>(null);
-    function handleSuggestionSelected(suggestion: RuleSuggestion) {
-        setPrefilledSuggestion(suggestion);
-        //setSelectedTx(null);
-    }
+    useEffect(() => {
+        // Clear any existing suggestion when the page loads
+        clearSuggestion();
+    }, [clearSuggestion]);
 
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
@@ -31,31 +29,18 @@ const RulesPage = () => {
                 <RuleBuilder
                     onSave={addRule}
                     prefilled={
-                        prefilledSuggestion
+                        suggestion
                             ? {
-                                  label: prefilledSuggestion.label,
+                                  label: suggestion.label,
                                   active: true,
                                   priority: 0,
                                   stopProcessing: false,
-                                  conditions: prefilledSuggestion.conditions,
-                                  actions: prefilledSuggestion.actions,
+                                  conditions: suggestion.conditions,
+                                  actions: suggestion.actions,
                               }
                             : undefined
                     }
                 />
-
-                <div className="space-y-3">
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                        Rules{" "}
-                        {loading && <span className="text-slate-400 font-normal">(loading…)</span>}
-                    </h2>
-                    <RuleList
-                        rules={rules}
-                        onToggle={toggleRule}
-                        onDelete={deleteRule}
-                        onReorder={reorderRule}
-                    />
-                </div>
             </div>
 
             {/* Right: code preview + simulation */}

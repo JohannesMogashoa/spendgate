@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import React from "react";
+import { RulesStoreProvider } from "@/context/providers/rules-store-provider";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -32,8 +33,12 @@ export default function RootLayout({
             className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
         >
             <body className="min-h-full flex flex-col">
-                <Header />
-                {children}
+                <main className="min-h-screen bg-slate-50">
+                    <Header />
+                    <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
+                        <RulesStoreProvider>{children}</RulesStoreProvider>
+                    </div>
+                </main>
             </body>
         </html>
     );

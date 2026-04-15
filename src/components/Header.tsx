@@ -1,13 +1,15 @@
 "use client";
 import React from "react";
 import { useRules } from "@/hooks/useRules";
+import { useRouter } from "next/navigation";
 
 const Header = () => {
     const { rules } = useRules();
+    const router = useRouter();
     return (
         <header className="border-b border-slate-200 bg-white shadow-sm">
             <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-3">
-                <div>
+                <div onClick={() => router.push("/")} className="cursor-pointer">
                     <h1 className="text-xl font-bold text-slate-900 tracking-tight">SpendGate</h1>
                     <p className="text-xs text-slate-500">Investec Programmable Card Rule Engine</p>
                 </div>
