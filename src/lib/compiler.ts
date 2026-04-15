@@ -5,71 +5,90 @@ import { RuleAction, RuleCondition, SpendRule } from "./types";
  * Runtime variables: amount (number), merchant (string), hour (number)
  */
 export function compileCondition(cond: RuleCondition): string {
-	const { field, op, value } = cond;
+    const { field, op, value } = cond;
 
-	if (field === "merchant" && op === "contains") {
-		const escaped = String(value).replace(/'/g, "\\'");
-		return `merchant.includes('${escaped}')`;
-	}
+    if (field === "merchant" && op === "contains") {
+        const escaped = String(value).replace(/'/g, "\\'");
+        return `merchant.includes('${escaped}')`;
+    }
 
-	const numVal = Number(value);
-	switch (op) {
-		case "gt":
-			return `${field} > ${numVal}`;
-		case "lt":
-			return `${field} < ${numVal}`;
-		case "gte":
-			return `${field} >= ${numVal}`;
-		case "lte":
-			return `${field} <= ${numVal}`;
-		case "eq":
-			if (field === "merchant") {
-				const escaped = String(value).replace(/'/g, "\\'");
-				return `merchant === '${escaped}'`;
-			}
-			return `${field} === ${numVal}`;
-		default:
-			return "false";
-	}
+    const numVal = Number(value);
+    switch (op) {
+        case "gt":
+            return `${field} > ${numVal}`;
+        case "lt":
+            return `${field} < ${numVal}`;
+        case "gte":
+            return `${field} >= ${numVal}`;
+        case "lte":
+            return `${field} <= ${numVal}`;
+        case "eq":
+            if (field === "merchant") {
+                const escaped = String(value).replace(/'/g, "\\'");
+                return `merchant === '${escaped}'`;
+            }
+            return `${field} === ${numVal}`;
+        default:
+            return "false";
+    }
 }
 
 /**
  * Compile an array of conditions to a single AND expression.
  */
 export function compileConditions(conditions: RuleCondition[]): string {
-	if (conditions.length === 0) return "true";
-	return conditions.map(compileCondition).join(" && ");
+    if (conditions.length === 0) return "true";
+    return conditions.map(compileCondition).join(" && ");
 }
 
 /**
  * Compile a single action to a JS statement.
  */
 function compileAction(action: RuleAction): string {
-	if (action.type === "block") {
-		return `    return false;`;
-	}
-	const channel = action.channel ?? "push";
-	return `    console.log('[notify:${channel}] Rule triggered');`;
+    if (action.type === "block") {
+        return `    return false;`;
+    }
+    const channel = action.channel ?? "push";
+    return `    console.log('[notify:${channel}] Rule triggered');`;
+}
+
+/**
+ * Compile webhook call for rule trigger event.
+ * Fire-and-forget so it doesn't delay the card decision.
+ */
+function compileWebhookCall(ruleId: string, outcome: "blocked" | "notified" | "allowed"): string {
+    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const sanitizedId = ruleId.replace(/[^a-z0-9_-]/gi, "_");
+
+    return `    fetch("${baseUrl}/api/investec/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ruleId: "${sanitizedId}",
+        outcome: "${outcome}",
+        authorization: transaction
+      })
+    }).catch(() => {});`;
 }
 
 /**
  * Compile a single SpendRule to a JS if-block string.
  */
 export function ruleToCode(rule: SpendRule): string {
-	const condExpr = compileConditions(rule.conditions);
-	const actionLines = rule.actions.map(compileAction).join("\n");
+    const condExpr = compileConditions(rule.conditions);
+    const actionLines = rule.actions.map(compileAction).join("\n");
+    const isBlock = rule.actions.some((a) => a.type === "block");
 
-	const lines = [
-		`  // Rule: ${rule.label}`,
-		`  if (${condExpr}) {`,
-		actionLines,
-		rule.stopProcessing && !rule.actions.some((a) => a.type === "block")
-			? `    return true; // stopProcessing`
-			: null,
-		`  }`,
-	].filter(Boolean);
+    const lines = [
+        `  // Rule: ${rule.label}`,
+        `  if (${condExpr}) {`,
+        compileWebhookCall(rule.id, isBlock ? "blocked" : "notified"),
+        actionLines,
+        rule.stopProcessing && !isBlock ? `    return true; // stopProcessing` : null,
+        `  }`,
+    ].filter(Boolean);
 
-	return lines.join("\n");
+    return lines.join("\n");
 }
 
 /**
@@ -77,20 +96,18 @@ export function ruleToCode(rule: SpendRule): string {
  * Rules are sorted by priority (ascending = lower number runs first).
  */
 export function compileRules(rules: SpendRule[]): string {
-	const active = rules
-		.filter((r) => r.active)
-		.sort((a, b) => a.priority - b.priority);
+    const active = rules.filter((r) => r.active).sort((a, b) => a.priority - b.priority);
 
-	if (active.length === 0) {
-		return `// before_transaction hook — no active rules
+    if (active.length === 0) {
+        return `// before_transaction hook — no active rules
 const beforeTransaction = (transaction) => {
   return true;
 };`;
-	}
+    }
 
-	const ruleBodies = active.map(ruleToCode).join("\n\n");
+    const ruleBodies = active.map(ruleToCode).join("\n\n");
 
-	return `// Auto-generated by SpendGate — do not edit manually
+    return `// Auto-generated by SpendGate — do not edit manually
 // Generated: ${new Date().toISOString()}
 
 const beforeTransaction = (transaction) => {
