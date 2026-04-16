@@ -1,0 +1,39 @@
+{
+    "semi": true,
+    "singleQuote": false,
+    "jsxSingleQuote": false,
+    "tabWidth": 4,
+    "useTabs": false,
+    "printWidth": 100,
+    "trailingComma": "es5",
+    "bracketSpacing": true,
+    "bracketSameLine": false,
+    "arrowParens": "always",
+    "endOfLine": "lf",
+    "quoteProps": "as-needed",
+    "htmlWhitespaceSensitivity": "css",
+    "embeddedLanguageFormatting": "auto",
+    "singleAttributePerLine": false,
+    "overrides": [
+        {
+            "files": ["*.json", "*.jsonc"],
+            "options": {
+                "tabWidth": 2
+            }
+        },
+        {
+            "files": ["*.md", "*.mdx"],
+            "options": {
+                "proseWrap": "always",
+                "printWidth": 80
+            }
+        },
+        {
+            "files": ["*.yml", "*.yaml"],
+            "options": {
+                "tabWidth": 2,
+                "singleQuote": true
+            }
+        }
+    ]
+}

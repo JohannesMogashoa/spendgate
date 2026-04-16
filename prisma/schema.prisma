@@ -15,6 +15,20 @@ model SpendRule {
     stopProcessing Boolean  @default(false)
     conditions     Json // RuleCondition[]
     actions        Json // RuleAction[]
+    triggerCount   Int      @default(0)
+    savedAmount    Int      @default(0)  // in cents
     createdAt      DateTime @default(now())
     updatedAt      DateTime @updatedAt
+    events         TransactionEvent[]
+}
+
+model TransactionEvent {
+    id            String   @id @default(cuid())
+    ruleId        String
+    rule          SpendRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+    outcome       String   // "allowed" | "blocked" | "notified"
+    centsAmount   Int
+    merchantName  String?
+    currencyCode  String   @default("ZAR")
+    occurredAt    DateTime @default(now())
 }
