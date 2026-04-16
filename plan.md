@@ -1052,7 +1052,7 @@ for new rules, and a transaction list with right-click context menu.
 The core UX: a sentence-completion form. Never show raw field names. The user
 completes:
 
-> "When my [field selector] [operator selector] [value input], [action >
+> "When my [field selector] [operator selector] [value input], [action > >
 > selector]."
 
 Key implementation notes:

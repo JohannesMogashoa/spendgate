@@ -32,7 +32,7 @@ notices.
   `npm run lint`, `npm run prisma:generate`, `npm run prisma:migrate`,
   `npm run prisma:studio`.
 - Prisma client is configured with generator output `src/lib/generated/prisma`,
-and runtime usage should import from `@/lib/generated/prisma/client` (for
-example in `src/lib/prisma.ts`); keep generator config and import paths
-consistent unless intentionally refactoring both.
-    <!-- END:nextjs-agent-rules -->
+  and runtime usage should import from `@/lib/generated/prisma/client` (for
+  example in `src/lib/prisma.ts`); keep generator config and import paths
+  consistent unless intentionally refactoring both.
+  <!-- END:nextjs-agent-rules -->
