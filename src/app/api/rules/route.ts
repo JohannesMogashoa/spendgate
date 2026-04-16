@@ -7,17 +7,15 @@ const DEPLOY_RETRY_MAX = 2;
 
 async function triggerRedeploy(
     cardKey: string,
+    baseUrl: string,
     attempt: number = 1
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const res = await fetch(
-            new URL("/api/rules/deploy", process.env.NEXTAUTH_URL ?? "http://localhost:3000"),
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cardKey }),
-            }
-        );
+        const res = await fetch(new URL("/api/rules/deploy", baseUrl), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cardKey }),
+        });
 
         if (!res.ok) {
             const data = (await res.json().catch(() => ({}))) as {
@@ -33,7 +31,7 @@ async function triggerRedeploy(
 
         if (attempt < DEPLOY_RETRY_MAX) {
             await new Promise((r) => setTimeout(r, 500 * attempt));
-            return triggerRedeploy(cardKey, attempt + 1);
+            return triggerRedeploy(cardKey, baseUrl, attempt + 1);
         }
 
         return { success: false, error: message };
@@ -71,9 +69,11 @@ export async function POST(req: NextRequest) {
             },
         });
 
+        const baseUrl = req.nextUrl.origin;
+
         // Trigger redeploy if card key provided
         if (cardKey?.trim()) {
-            await triggerRedeploy(cardKey.trim());
+            await triggerRedeploy(cardKey.trim(), baseUrl);
         }
 
         return NextResponse.json(rule, { status: 201 });

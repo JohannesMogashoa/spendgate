@@ -50,26 +50,40 @@ and time, and see exactly which rule would fire.
 
 ## Architecture
 
-SpendGate is a Next.js 14 App Router application using server-side API routes as
-a secure proxy between the browser and the Investec API. Investec credentials
-never leave the server.
+SpendGate is a Next.js 16 App Router application under `src/app/` using route
+handlers in `src/app/api/` as the server boundary between the browser, Postgres,
+and the Investec APIs. Investec credentials stay on the server; the browser only
+sends user actions such as rule CRUD, simulation requests, and deployment
+triggers.
 
 ```
-Browser (Next.js UI)
+Browser (Next.js + React UI)
     │
-    │  Rule CRUD, transaction fetch, simulate
+    │  Rule CRUD, transaction fetch, compile, simulate, deploy
     ▼
-Next.js API Routes  (/app/api/*)
+App Router route handlers (`src/app/api/*`)
     │
-    ├── lib/compiler.ts        Rule objects → JS string
-    ├── lib/deployer.ts        Investec Card API calls (simulate → save → publish)
-    ├── lib/investec-client.ts OAuth2 token management + fetch wrapper
-    ├── lib/rule-suggester.ts  Transaction → rule suggestion logic
-    └── lib/crypto.ts          AES-256-GCM credential encryption
+    ├── compile/route.ts             Compile current rules to card JavaScript
+    ├── simulate/route.ts            Run local rule simulation against sample input
+    ├── rules/route.ts               List/create persisted rules
+    ├── rules/[id]/route.ts          Patch/delete rules + trigger redeploy
+    ├── rules/deploy/route.ts        Redeploy active rules for a card key
+    ├── deploy/route.ts              Compile + deploy an explicit ruleset/card key
+    ├── transactions/route.ts        Fetch recent Investec transactions
+    ├── suggest-rule/route.ts        Generate deterministic rule suggestions
+    └── investec/webhook/route.ts    Receive card webhook events
     │
-    ├── Investec Open API      GET /cards, POST /cards/:key/code, POST /cards/:key/publish
-    ├── Investec Card Env      beforeTransaction() runs here, fires webhook back to SpendGate
-    └── PostgreSQL (Prisma)    Users, Rules, TransactionEvents, DeploymentLogs
+    ├── src/lib/compiler.ts          `SpendRule[]` → compiled card code
+    ├── src/lib/simulator.ts         Local-first transaction simulation
+    ├── src/lib/cardDeployer.ts      Simulate → save → publish card code
+    ├── src/lib/investec-client.ts   OAuth2 token caching + authenticated fetches
+    ├── src/lib/rule-suggester.ts    Transaction → suggested rules
+    ├── src/lib/prisma.ts            Prisma client wrapper
+    └── src/lib/generated/prisma/*   Generated Prisma client
+    │
+    ├── Investec Open API            OAuth2, accounts/transactions, programmable card endpoints
+    ├── Investec Card Environment    Executes deployed card code and posts webhooks
+    └── PostgreSQL via Prisma        `SpendRule`, `TransactionEvent`
 ```
 
 ### The deploy loop
@@ -94,15 +108,18 @@ configured.
 
 ## Tech stack
 
-| Layer      | Choice                  | Why                                                      |
-| ---------- | ----------------------- | -------------------------------------------------------- |
-| Framework  | Next.js 14 (App Router) | Server components + API routes in one repo               |
-| Language   | TypeScript              | End-to-end type safety for the rule DSL                  |
-| Database   | PostgreSQL via Prisma   | Relational, easy migrations, works on Supabase free tier |
-| Auth       | NextAuth (magic link)   | No passwords; low friction for first-time users          |
-| Email      | Resend                  | Simple API, generous free tier, good deliverability      |
-| Styling    | Tailwind CSS            | Fast to iterate, consistent design tokens                |
-| Deployment | Vercel                  | Zero-config Next.js, free tier sufficient for MVP        |
+| Layer            | Choice                                     | Why                                                                  |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------------------- |
+| Framework        | Next.js 16.2.2 (App Router)                | React 19 app with route handlers and server/client UI in one repo    |
+| Language         | TypeScript                                 | Shared types for rules, transactions, API payloads, and UI state     |
+| Database         | PostgreSQL via Prisma                      | Stores rules/events, supports migrations, and generates typed client |
+| ORM client       | Prisma Client (`src/lib/generated/prisma`) | Typed DB access generated into the app source tree                   |
+| Styling          | Tailwind CSS 4                             | Utility-first styling for the dashboard and rule builder             |
+| UI primitives    | Base UI + shadcn/ui                        | Headless primitives with local component wrappers                    |
+| Tables           | TanStack Table                             | Transaction table rendering, pagination, and column definitions      |
+| State management | React hooks + Zustand                      | Local UI state plus shared rule suggestion/store state               |
+| Integrations     | Investec Open API + Programmable Card      | Transaction retrieval and card-code deployment/publishing            |
+| Notifications    | Resend (available dependency)              | Present in the repo for notification/email workflows as needed       |
 
 ---
 
