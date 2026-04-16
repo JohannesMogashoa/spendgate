@@ -57,7 +57,7 @@ function compileAction(action: RuleAction): string {
  * Fire-and-forget so it doesn't delay the card decision.
  */
 function compileWebhookCall(ruleId: string, outcome: "blocked" | "notified" | "allowed"): string {
-    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const sanitizedId = ruleId.replace(/[^a-z0-9_-]/gi, "_");
 
     return `    fetch("${baseUrl}/api/investec/webhook", {

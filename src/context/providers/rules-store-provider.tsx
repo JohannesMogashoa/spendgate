@@ -22,7 +22,7 @@ export const RulesStoreProvider = ({ children }: RulesStoreProviderProps) => {
 export const useRulesStore = <T,>(selector: (store: RulesStore) => T): T => {
     const rulesStoreContext = useContext(RulesStoreContext);
     if (!rulesStoreContext) {
-        throw new Error(`usRulesStore must be used within RulesStoreProvider`);
+        throw new Error(`useRulesStore must be used within RulesStoreProvider`);
     }
 
     return useStore(rulesStoreContext, selector);

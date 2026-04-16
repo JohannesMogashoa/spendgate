@@ -1,7 +1,5 @@
 import { RuleCondition, SimulationResult, SpendRule, Transaction } from "./types";
 
-import { compileConditions } from "./compiler";
-
 /**
  * Evaluate a set of conditions against a resolved transaction context.
  */

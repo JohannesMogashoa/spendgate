@@ -194,6 +194,13 @@ function ConditionRow({
     onChange: (patch: Partial<RuleCondition>) => void;
     onRemove: () => void;
 }) {
+    const parseHour = (value: string): number => {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed)) return 0;
+
+        return Math.min(23, Math.max(0, Math.trunc(parsed)));
+    };
+
     const fieldOptions: RuleCondition["field"][] = ["amount", "merchant", "hour"];
     const opOptions: RuleCondition["op"][] =
         cond.field === "merchant" ? ["eq", "contains"] : ["gt", "lt", "gte", "lte", "eq"];
@@ -232,18 +239,19 @@ function ConditionRow({
 
             <input
                 className="flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                type={
-                    cond.field === "merchant" ? "text" : cond.field === "hour" ? "time" : "number"
-                }
+                type={cond.field === "merchant" ? "text" : "number"}
+                min={cond.field === "hour" ? 0 : undefined}
+                max={cond.field === "hour" ? 23 : undefined}
+                step={cond.field === "hour" ? 1 : undefined}
                 value={cond.value}
-                placeholder={cond.field === "merchant" ? "e.g. woolworths" : "0"}
+                placeholder={cond.field === "merchant" ? "e.g. woolworths" : cond.field === "hour" ? "0-23" : "0"}
                 onChange={(e) =>
                     onChange({
                         value:
                             cond.field === "merchant"
                                 ? e.target.value
                                 : cond.field === "hour"
-                                  ? e.target.value
+                                  ? parseHour(e.target.value)
                                   : Number(e.target.value),
                     })
                 }

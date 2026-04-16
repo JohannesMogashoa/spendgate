@@ -1,21 +1,9 @@
+"use client";
 import React, { useState } from "react";
 import { useRules } from "@/hooks/useRules";
 
 const CardKeyChanger = () => {
-    const {
-        rules,
-        compiledCode,
-        loading,
-        error,
-        deploying,
-        deployError,
-        lastDeployCodeId,
-        addRule,
-        toggleRule,
-        deleteRule,
-        reorderRule,
-        deployRules,
-    } = useRules();
+    const { deploying, deployError, lastDeployCodeId, deployRules } = useRules();
     const [cardKey, setCardKey] = useState(() => {
         if (typeof window === "undefined") return "";
         return window.localStorage.getItem("spendgate.cardKey") ?? "";

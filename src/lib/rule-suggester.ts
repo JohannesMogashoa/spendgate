@@ -25,23 +25,24 @@ export function suggestRulesFromTransaction(tx: InvestecTransaction): RuleSugges
     const amount = Math.abs(tx.amount);
     const date = new Date(tx.transactionDate);
     const hour = date.getHours();
+    const displayShortName = merchantName.split(" ")[0]?.trim() ?? "";
+    const normalizedShortName = displayShortName.toLowerCase();
 
     // Round up to nearest R50 for cleaner rule thresholds
     const roundedAmount = Math.ceil(amount / 50) * 50;
 
     // Suggestion 1: Block this exact merchant
     if (merchantName) {
-        const shortName = merchantName.split(" ")[0]; // first word only, prevents over-specific rules
-        if (shortName.length > 2) {
+        if (normalizedShortName.length > 2) {
             // avoid single-letter merchant names
             suggestions.push({
-                label: `Block ${shortName}`,
-                description: `Decline any future charges from "${shortName}"`,
+                label: `Block ${displayShortName}`,
+                description: `Decline any future charges from "${displayShortName}"`,
                 conditions: [
                     {
                         field: "merchant",
                         op: "contains",
-                        value: shortName,
+                        value: normalizedShortName,
                     },
                 ],
                 actions: [{ type: "block" }],
@@ -65,13 +66,12 @@ export function suggestRulesFromTransaction(tx: InvestecTransaction): RuleSugges
 
     // Suggestion 3: Block this merchant after hours (if transaction was late)
     if (hour >= 20 && merchantName) {
-        const shortName = merchantName.split(" ")[0];
-        if (shortName.length > 2) {
+        if (normalizedShortName.length > 2) {
             suggestions.push({
-                label: `Block ${shortName} after 8pm`,
-                description: `Prevent late-night charges from "${shortName}"`,
+                label: `Block ${displayShortName} after 8pm`,
+                description: `Prevent late-night charges from "${displayShortName}"`,
                 conditions: [
-                    { field: "merchant", op: "contains", value: shortName },
+                    { field: "merchant", op: "contains", value: normalizedShortName },
                     { field: "hour", op: "gte", value: 20 },
                 ],
                 actions: [{ type: "block" }],
