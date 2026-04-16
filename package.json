@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "DATABASE_URL=${DATABASE_URL:-postgresql://localhost:5432/prisma_generate_only} prisma generate",
+    "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
