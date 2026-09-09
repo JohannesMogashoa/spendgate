@@ -1,225 +1,198 @@
 # SpendGate
 
-> Programmable spending rules for your Investec card — built for humans, not
-> just developers.
+SpendGate is a TypeScript application for experimenting with programmable spending controls on top of Investec banking APIs. It turns structured spending rules into executable card logic, supports simulation before deployment, and keeps rule/event state in PostgreSQL.
 
-SpendGate lets Investec cardholders define plain-English spending rules through
-a no-code interface. Rules are compiled into JavaScript and deployed directly to
-the Investec Programmable Card via the official API, where they execute in
-real-time on every transaction.
+The current repository is a Next.js 16 application with server route handlers, a rule compiler/simulator, Investec integration helpers, Prisma persistence, and push-notification infrastructure.
 
----
+> **Current status:** the core rule engine, Investec-facing helpers, API routes, persistence models, and deployment/simulation primitives are present. The README deliberately separates those implemented pieces from product ideas that may still be evolving.
 
-## The problem
+## What is implemented
 
-Investec's Programmable Banking is genuinely powerful — you can run custom
-JavaScript before every card transaction, block purchases, cap spending, and
-fire webhooks. But to use it, you need to write code and deploy it manually
-through the online IDE. That means the feature is invisible to the majority of
-Investec clients who aren't developers.
+The repository currently contains:
 
-SpendGate bridges that gap. It provides the authoring layer that the IDE doesn't
-have: a rule builder where anyone can express what they want in plain English,
-and SpendGate handles the compilation and deployment behind the scenes.
+- rule compilation from structured conditions/actions into card-executable JavaScript;
+- local rule simulation before deployment;
+- Investec API client helpers;
+- card deployment/publishing logic;
+- persisted `SpendRule` and `TransactionEvent` models;
+- rule CRUD/server routes;
+- deterministic rule suggestions;
+- health, proxy, Investec, push, compile, and rule API routes;
+- push-notification helper code;
+- PostgreSQL access through Prisma 7 and the PostgreSQL adapter.
 
----
+## Product idea
 
-## What it does
+Investec Programmable Banking gives developers a powerful way to run JavaScript around card transactions. SpendGate explores a higher-level authoring layer where spending controls can be expressed as structured rules, validated locally, compiled, and then deployed to the programmable-card environment.
 
-**Build rules without code.** Complete a sentence: "When my [amount / merchant /
-category / hour] [exceeds / contains / equals] [value], [block it / warn me]."
-SpendGate turns that into valid card JavaScript and deploys it to your card.
+Examples of rule concepts the engine is designed to represent include:
 
-**Block transactions at the source.** Rules run inside the Investec card
-environment before a transaction completes. A matching block rule declines the
-charge in real-time — not after the fact.
-
-**Generate rules from your own history.** Browse your last 90 days of
-transactions. Right-click any charge and SpendGate suggests 2–3 relevant rules
-based on the merchant, amount, and time of day. One click to adopt, tweak, and
-deploy.
-
-**See what's working.** The dashboard shows how many times each rule has fired,
-how much spending it has blocked this month, and when rules were last deployed.
-
-**Test before you deploy.** Run a simulated transaction against your current
-rules before publishing them to your real card — enter a merchant name, amount,
-and time, and see exactly which rule would fire.
-
----
+- amount thresholds;
+- merchant matching;
+- category-based controls;
+- time-based conditions;
+- block/allow/notify-style actions;
+- rule ordering and stop-processing behavior.
 
 ## Architecture
 
-SpendGate is a Next.js 16 App Router application under `src/app/` using route
-handlers in `src/app/api/` as the server boundary between the browser, Postgres,
-and the Investec APIs. Investec credentials stay on the server; the browser only
-sends user actions such as rule CRUD, simulation requests, and deployment
-triggers.
-
-```
-Browser (Next.js + React UI)
-    │
-    │  Rule CRUD, transaction fetch, compile, simulate, deploy
-    ▼
-App Router route handlers (`src/app/api/*`)
-    │
-    ├── compile/route.ts             Compile current rules to card JavaScript
-    ├── simulate/route.ts            Run local rule simulation against sample input
-    ├── rules/route.ts               List/create persisted rules
-    ├── rules/[id]/route.ts          Patch/delete rules + trigger redeploy
-    ├── rules/deploy/route.ts        Redeploy active rules for a card key
-    ├── deploy/route.ts              Compile + deploy an explicit ruleset/card key
-    ├── transactions/route.ts        Fetch recent Investec transactions
-    ├── suggest-rule/route.ts        Generate deterministic rule suggestions
-    └── investec/webhook/route.ts    Receive card webhook events
-    │
-    ├── src/lib/compiler.ts          `SpendRule[]` → compiled card code
-    ├── src/lib/simulator.ts         Local-first transaction simulation
-    ├── src/lib/cardDeployer.ts      Simulate → save → publish card code
-    ├── src/lib/investec-client.ts   OAuth2 token caching + authenticated fetches
-    ├── src/lib/rule-suggester.ts    Transaction → suggested rules
-    ├── src/lib/prisma.ts            Prisma client wrapper
-    └── src/lib/generated/prisma/*   Generated Prisma client
-    │
-    ├── Investec Open API            OAuth2, accounts/transactions, programmable card endpoints
-    ├── Investec Card Environment    Executes deployed card code and posts webhooks
-    └── PostgreSQL via Prisma        `SpendRule`, `TransactionEvent`
+```text
+Browser / client UI
+        |
+        v
+Next.js 16 App Router
+        |
+        +--> app/api/compile
+        +--> app/api/rules
+        +--> app/api/suggest-rule
+        +--> app/api/investec
+        +--> app/api/push
+        +--> app/api/proxy
+        +--> app/api/health
+        |
+        v
+Application helpers
+        |
+        +--> compiler.ts
+        +--> simulator.ts
+        +--> rule-suggester.ts
+        +--> cardDeployer.ts
+        +--> investec-client.ts
+        +--> push.ts
+        |
+        +--------------------+
+        |                    |
+        v                    v
+Investec APIs          PostgreSQL / Prisma
+programmable card      rules + transaction events
 ```
 
-### The deploy loop
+## Engineering highlights
 
-1. User creates or toggles a rule in the UI
-2. `POST /api/rules/deploy` is called automatically
-3. `compileRules()` merges all active rules into a single JS file
-4. The compiled code is tested against a dummy transaction via
-   `/cards/:key/code/execute`
-5. If simulation passes: the code is saved (`/cards/:key/code`) then published
-   (`/cards/:key/publish`)
-6. The card is live with the new ruleset within ~30 seconds
-
-### The transaction feedback loop
-
-When a rule fires on a real transaction, the compiled card code sends a webhook
-to `POST /api/investec/webhook`. SpendGate logs the event, increments the rule's
-trigger count, updates cumulative savings, and sends a notification if
-configured.
-
----
+- **Compile-before-deploy workflow** — structured rules are converted into executable card code rather than manually authored for every change.
+- **Simulation boundary** — rule behavior can be evaluated locally before publishing code to a real programmable-card environment.
+- **Shared rule semantics** — conditions/actions are modeled as data so UI, simulation, persistence, and compilation can operate on the same contract.
+- **Explicit deployment layer** — card deployment lives in `lib/cardDeployer.ts` instead of being mixed directly into UI components.
+- **Typed persistence** — Prisma models store rule configuration and transaction outcomes using PostgreSQL.
+- **Server-side credentials** — Investec credentials and deployment logic stay behind server routes/helpers rather than being exposed to browser code.
 
 ## Tech stack
 
-| Layer            | Choice                                     | Why                                                                  |
-| ---------------- | ------------------------------------------ | -------------------------------------------------------------------- |
-| Framework        | Next.js 16.2.2 (App Router)                | React 19 app with route handlers and server/client UI in one repo    |
-| Language         | TypeScript                                 | Shared types for rules, transactions, API payloads, and UI state     |
-| Database         | PostgreSQL via Prisma                      | Stores rules/events, supports migrations, and generates typed client |
-| ORM client       | Prisma Client (`src/lib/generated/prisma`) | Typed DB access generated into the app source tree                   |
-| Styling          | Tailwind CSS 4                             | Utility-first styling for the dashboard and rule builder             |
-| UI primitives    | Base UI + shadcn/ui                        | Headless primitives with local component wrappers                    |
-| Tables           | TanStack Table                             | Transaction table rendering, pagination, and column definitions      |
-| State management | React hooks + Zustand                      | Local UI state plus shared rule suggestion/store state               |
-| Integrations     | Investec Open API + Programmable Card      | Transaction retrieval and card-code deployment/publishing            |
-| Notifications    | Resend (available dependency)              | Present in the repo for notification/email workflows as needed       |
+| Area | Technology |
+| --- | --- |
+| Web | Next.js 16.2 + React 19 |
+| Language | TypeScript |
+| Styling | Tailwind CSS 4 + shadcn/Base UI |
+| Database | PostgreSQL |
+| ORM | Prisma 7 + `@prisma/adapter-pg` |
+| State | Zustand |
+| Tables | TanStack Table |
+| Validation | Zod |
+| Notifications | Expo Server SDK + Resend dependency |
+| Investec integration | custom server-side client/helpers |
 
----
+## Repository structure
 
-## Monetisation
+```text
+app/                  Next.js pages and server route handlers
+components/           application UI
+context/              React context/state boundaries
+hooks/                client hooks
+lib/
+  compiler.ts         structured rules -> card JavaScript
+  simulator.ts        local rule evaluation
+  rule-suggester.ts   transaction -> suggested rules
+  cardDeployer.ts     card code deployment/publishing
+  investec-client.ts  Investec API client
+  prisma.ts           PostgreSQL/Prisma client
+  push.ts             push notification helper
+prisma/
+  schema.prisma       SpendRule and TransactionEvent models
+```
 
-SpendGate charges a monthly subscription fee — the value proposition is time
-saved and overspending prevented. Users who have blocked even one impulse
-purchase have already justified the cost.
+## Data model
 
-| Tier   | Price   | What you get                                                                |
-| ------ | ------- | --------------------------------------------------------------------------- |
-| Free   | R0/mo   | 2 active rules, basic block + notify                                        |
-| Plus   | R79/mo  | Unlimited rules, email notifications, transaction history, rule suggestions |
-| Family | R149/mo | Up to 4 cards, shared rule library, per-card dashboards                     |
+The current Prisma schema stores two central concepts:
 
-Developer pricing is intentionally accessible because developers are the first
-adopters and the community amplifiers. Normal-person pricing is slightly higher
-because the onboarding and support overhead is greater.
+### `SpendRule`
 
----
+A persisted rule with:
+
+- label and active state;
+- priority/order;
+- stop-processing behavior;
+- JSON conditions and actions;
+- trigger count;
+- cumulative saved amount.
+
+### `TransactionEvent`
+
+An observed rule outcome containing:
+
+- related rule;
+- outcome (`allowed`, `blocked`, `notified`, etc.);
+- amount in cents;
+- optional merchant name;
+- currency and occurrence time.
 
 ## Getting started
 
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL database (Supabase free tier works)
-- Investec Developer account with Programmable Banking enabled
-- API credentials from the
-  [Investec Developer Portal](https://developer.investec.com)
+- npm
+- PostgreSQL
+- Investec API credentials for integration work
 
-### Setup
+Install dependencies:
 
 ```bash
-git clone https://github.com/your-username/spendgate
-cd spendgate
 npm install
-cp .env.example .env.local
 ```
 
-Fill in `.env.local` with your Investec credentials, database URL, and NextAuth
-secret. Generate an encryption key:
+Configure a local environment with at least the database connection and any Investec credentials required by the routes you intend to exercise.
 
-```bash
-openssl rand -hex 32
+```env
+DATABASE_URL=postgresql://...
 ```
 
-Then:
+Generate the Prisma client and apply your local schema/migrations as appropriate:
 
 ```bash
-npx prisma migrate dev
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+Start the application:
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and log in with a magic
-link.
+The Next.js development server runs on the framework default port unless overridden locally.
 
-> **Use sandbox first.** Set `USE_SANDBOX=true` in your `.env.local` during
-> development. The Investec sandbox is a full mock of the card environment and
-> costs nothing to test against.
+## Development commands
 
----
+```bash
+npm run build
+npm run lint
+npm run format:check
+npm run check
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:studio
+```
 
-## Development notes
+## Security notes
 
-The card code runs in a constrained JavaScript environment inside Investec's
-infrastructure. Key constraints:
+SpendGate operates around financial APIs and programmable-card behavior.
 
-- Execution timeout of ~2 seconds — keep `beforeTransaction` fast
-- No `require()` or `import` — ES2020 globals only
-- All rules compile to a single file — SpendGate merges everything into one
-  `beforeTransaction` function
-- `authorization.centsAmount` is always in cents — divide by 100 for rand
-  amounts
+- Never expose Investec client secrets or access tokens to browser code.
+- Keep `DATABASE_URL` and notification credentials out of source control.
+- Simulate and validate generated rule code before publishing it.
+- Treat any webhook/proxy surface as untrusted input and validate requests at the server boundary.
+- Use sandbox/test environments before exercising real card behavior.
 
-See `knowledge/gotchas.md` for a full list of API quirks discovered during
-development.
+## Current direction
 
----
-
-## Investec Programmable Banking
-
-This project is built on
-[Investec Programmable Banking](https://www.investec.com/en_za/banking/tech-professionals/programmable-banking.html),
-which allows Investec clients to deploy JavaScript that runs before and after
-every card transaction.
-
-Community resources:
-
-- [Developer Wiki](https://investec.gitbook.io/programmable-banking-community-wiki)
-- [Community Projects](https://github.com/Investec-Developer-Community/Community-Projects)
-- [Slack Community](https://investec-dev-com.slack.com)
-
----
-
-## License
-
-MIT — see `LICENSE`.
-
----
-
-_Built for the
-[Investec Q2 2026 API Side Hustle Bounty](https://investec.gitbook.io/programmable-banking-community-wiki/get-building/build-events/q2-2026-bounty-challenge-or-api-side-hustle)._
+The strongest part of this repository is the programmable-spending engineering model: **rules as data -> simulation -> compilation -> controlled deployment -> event feedback**. UI, onboarding, authentication, pricing, and commercial packaging can evolve around that core without changing the README into a promise for features that are not yet implemented.
